@@ -74,7 +74,6 @@ module Fedex
         raise NotImplementedError, "Override process_request in subclass"
       end
 
-      private
       # Add web authentication detail information(key and password) to xml request
       def add_web_authentication_detail(xml)
         xml.WebAuthenticationDetail{
