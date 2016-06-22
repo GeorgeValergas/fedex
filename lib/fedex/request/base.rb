@@ -51,6 +51,7 @@ module Fedex
         requires!(options, :shipper, :recipient, :packages)
         @credentials = credentials
         @shipper, @recipient, @packages, @service_type, @customs_clearance_detail, @debug = options[:shipper], options[:recipient], options[:packages], options[:service_type], options[:customs_clearance_detail], options[:debug]
+        @freight_address, @freight_contact = options[:freight_address], options[:freight_contact]
         @debug = ENV['DEBUG'] == 'true'
         @shipping_options =  options[:shipping_options] ||={}
         @payment_options = options[:payment_options] ||={}
@@ -168,8 +169,9 @@ module Fedex
           xml.PaymentType @payment_options[:type] || "SENDER"
           xml.Payor{
             if service[:version].to_i >= Fedex::API_VERSION.to_i
+              account_number = service_type && service_type.include?("FREIGHT") ? @credentials.freight_account_number : @credentials.account_number
               xml.ResponsibleParty {
-                xml.AccountNumber @payment_options[:account_number] || @credentials.account_number
+                xml.AccountNumber account_number
                 xml.Contact {
                   xml.PersonName @payment_options[:name] || @shipper[:name]
                   xml.CompanyName @payment_options[:company] || @shipper[:company]
@@ -177,7 +179,7 @@ module Fedex
                 }
               }
             else
-              xml.AccountNumber @payment_options[:account_number] || @credentials.account_number
+              xml.AccountNumber account_number
               xml.CountryCode @payment_options[:country_code] || @shipper[:country_code]
             end
           }
@@ -276,6 +278,58 @@ module Fedex
             end
           }
         end
+      end
+
+      def add_freight_shipment_detail(xml)
+        xml.FreightShipmentDetail {
+            xml.FedExFreightAccountNumber @credentials.freight_account_number
+            xml.FedExFreightBillingContactAndAddress {
+              xml.Contact{
+                xml.PersonName @freight_contact[:person_name]
+                xml.Title @freight_contact[:title]
+                xml.CompanyName @freight_contact[:company_name]
+                xml.PhoneNumber @freight_contact[:phone_number]
+              }
+              xml.Address {
+                Array(@freight_address[:address]).take(2).each do |address_line|
+                  xml.StreetLines address_line
+                end
+                xml.City @freight_address[:city]
+                xml.StateOrProvinceCode @freight_address[:state]
+                xml.PostalCode @freight_address[:postal_code]
+                xml.CountryCode @freight_address[:country_code]
+              }
+            }
+          xml.Role "SHIPPER"
+          xml.CollectTermsType "STANDARD"
+          xml.TotalHandlingUnits 1
+          xml.ClientDiscountPercent 0
+          xml.PalletWeight {
+            xml.Units @packages.first[:weight][:units]
+            xml.Value @packages.first[:weight][:value]
+          }
+          @packages.each do |package|
+            xml.LineItems {
+              xml.FreightClass 'CLASS_085'
+              xml.ClassProvidedByCustomer false
+              xml.HandlingUnits 1
+              xml.Packaging 'PALLET'
+              xml.Pieces package[:qty] || 1
+              xml.PurchaseOrderNumber package[:reference]
+              xml.Description package[:description] || "Food"
+              xml.Weight {
+                xml.Units package[:weight][:units]
+                xml.Value package[:weight][:value]
+              }
+              xml.Dimensions {
+                xml.Length package[:dimensions][:length].to_i
+                xml.Width package[:dimensions][:width].to_i
+                xml.Height package[:dimensions][:height].to_i
+                xml.Units package[:dimensions][:units]
+              } if package[:dimensions]
+            }
+          end
+        }
       end
 
       def add_customer_references(xml, package)

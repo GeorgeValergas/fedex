@@ -38,9 +38,10 @@ module Fedex
           add_recipient(xml)
           add_shipping_charges_payment(xml)
           add_customs_clearance(xml) if @customs_clearance_detail
+          add_freight_shipment_detail(xml) if @freight_address
           xml.RateRequestTypes "ACCOUNT"
           xml.EdtRequestType @shipping_options[:edt_request_type] ||= "NONE"
-          add_packages(xml)
+          add_packages(xml) unless @freight_address
         }
       end
 
