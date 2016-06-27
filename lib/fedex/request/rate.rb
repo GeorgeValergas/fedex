@@ -4,6 +4,9 @@ module Fedex
   module Request
     class Rate < Base
       # Sends post request to Fedex web service and parse the response, a Rate object is created if the response is successful
+      def show_request
+        puts build_xml
+      end
       def process_request
         api_response = self.class.post(api_url, :body => build_xml)
         puts api_response if @debug
